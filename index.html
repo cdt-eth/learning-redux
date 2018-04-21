@@ -68,6 +68,22 @@
             }
         }
 
+        // we wanted to separate data-fetching logic from UI logic
+        // move async code here (action creator) and out of our component code
+
+        // if what is dispatched is a function, we invoke that function, passing dispatch
+        // if what is dispatched is an object, we carry on as normal
+        function handleDeleteTodo(todo) {
+            return (dispatch) => {
+                dispatch(removeTodoAction(todo.id))
+                return API.deleteTodo(todo.id)
+                    .catch(() => {
+                        dispatch(addTodoAction(todo))
+                        alert('An error occured. Please try again.')
+                    })
+            }
+        }
+
         // Middleware
         const checker = (store) => (next) => (action) => {
             if (
@@ -94,6 +110,14 @@
             return result
         }
 
+        // this explains the handleDeleteTodo notes above
+        const thunk = (store) => (next) => (action) => {
+            if (typeof action === 'function') {
+                return action(store.dispatch)
+            }
+
+            return next(action)
+        }
 
         // todos Reducer
         function todos(state = [], action) {
@@ -151,7 +175,7 @@
             todos,
             goals,
             loading,
-        }), Redux.applyMiddleware(checker, logger))
+        }), Redux.applyMiddleware(thunk, checker, logger))
     </script>
 
     <script type="text/babel">
@@ -175,26 +199,29 @@
 class Todos extends React.Component {
       addItem = (e) => {
         e.preventDefault()
-        const name = this.input.value
-        this.input.value = ''
-        this.props.store.dispatch(addTodoAction({
-          id: generateId(),
-          name,
-          complete: false,
-        }))
+       
+        return API.saveTodo(this.input.value)
+            .then((todo)=>{
+                this.props.store.dispatch(addTodoAction(todo))
+                this.input.value = ''
+            })
+            .catch(()=> alert('An error occured. Please try again.'))
       }
       // optimistically delete a todo
       removeItem = (todo) => {
-        this.props.store.dispatch(removeTodoAction(todo.id))
-        return API.deleteTodo(todo.id)
-             .catch(()=>{
-                 this.props.store.dispatch(addTodoAction(todo))
-                 alert('An error occured. Please try again.')
-        })
-
+        this.props.store.dispatch(handleDeleteTodo(todo))
       }
+
+    // optimistically toggle a todo
       toggleItem = (id) => {
+      //updates store then UI
         this.props.store.dispatch(toggleTodoAction(id))
+
+        return API.saveTodoToggle(id)
+            .catch(()=>{    
+                this.props.store.dispatch(toggleTodoAction(id))
+                alert('An error occured. Please try again.')
+            })
       }
       render() {
         return (
@@ -219,12 +246,14 @@ class Todos extends React.Component {
 class Goals extends React.Component {
       addItem = (e) => {
         e.preventDefault()
-        const name = this.input.value
-        this.input.value = ''
-        this.props.store.dispatch(addGoalAction({
-          id: generateId(),
-          name,
-        }))
+
+
+        return API.saveGoal(this.input.value)
+            .then((goal)=>{
+                this.props.store.dispatch(addGoalAction(goal))
+                this.input.value = ''
+            })
+            .catch(()=> alert('An error occured. Please try again.'))
       }
       // optimistically delete a goal
       removeItem = (goal) => {
